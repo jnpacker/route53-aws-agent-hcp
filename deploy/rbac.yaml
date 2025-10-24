@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: route53-controller
+  namespace: hypershift
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: route53-controller
+rules:
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - hostedclusters
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - hostedclusters/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - hostedclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - nodepools
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - nodepools/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - hypershift.openshift.io
+  resources:
+  - nodepools/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - agent-install.openshift.io
+  resources:
+  - agents
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: route53-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: route53-controller
+subjects:
+- kind: ServiceAccount
+  name: route53-controller
+  namespace: hypershift

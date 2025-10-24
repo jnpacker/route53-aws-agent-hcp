@@ -1,0 +1,16 @@
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Build artifacts
+bin/
+dist/
+
+# IDE
+.vscode/
+.cursor/
