@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: route53-controller
+  namespace: hypershift
+  labels:
+    app: route53-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: route53-controller
+  template:
+    metadata:
+      labels:
+        app: route53-controller
+    spec:
+      serviceAccountName: route53-controller
+      containers:
+      - name: manager
+        image: route53-aws-agent-hcp:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - /manager
+        args:
+        - --leader-elect
+        env:
+        # AWS credentials can be provided via IRSA (IAM Roles for Service Accounts)
+        # or via environment variables
+        - name: AWS_REGION
+          value: "us-east-1"
+        # Uncomment if using static credentials (not recommended for production)
+        # - name: AWS_ACCESS_KEY_ID
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: aws_access_key_id
+        # - name: AWS_SECRET_ACCESS_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aws-credentials
+        #       key: aws_secret_access_key
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      terminationGracePeriodSeconds: 10
