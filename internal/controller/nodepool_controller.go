@@ -99,12 +99,24 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 
-			// Remove finalizer
-			controllerutil.RemoveFinalizer(&nodePool, NodePoolFinalizerName)
-			if err := r.Update(ctx, &nodePool); err != nil {
-				logger.Error(err, "Failed to remove finalizer")
+			// Fetch fresh copy before removing finalizer to avoid conflicts
+			var freshNodePool hypershiftv1beta1.NodePool
+			if err := r.Get(ctx, req.NamespacedName, &freshNodePool); err != nil {
+				if apierrors.IsNotFound(err) {
+					logger.Info("NodePool was deleted before finalizer removal, ignoring")
+					return ctrl.Result{}, nil
+				}
+				logger.Error(err, "Failed to fetch fresh NodePool copy for finalizer removal")
 				return ctrl.Result{}, err
 			}
+
+			// Remove finalizer from fresh copy
+			controllerutil.RemoveFinalizer(&freshNodePool, NodePoolFinalizerName)
+			if err := r.Update(ctx, &freshNodePool); err != nil {
+				logger.Error(err, "Failed to remove finalizer", "resourceVersion", freshNodePool.ResourceVersion)
+				return ctrl.Result{}, err
+			}
+			logger.Info("Successfully removed finalizer")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -126,14 +138,7 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
-	if len(agentIPs) == 0 {
-		logger.Info("No Agent IPs available yet, requeuing")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	}
-
-	logger.Info("Found Agent IPs", "count", len(agentIPs), "ips", agentIPs)
-
-	// Find the Route53 hosted zone
+	// Find the Route53 hosted zone (needed whether we're creating or deleting)
 	hostedZone, err := r.Route53Client.FindHostedZoneByDomain(ctx, baseDomain)
 	if err != nil {
 		logger.Error(err, "Failed to find Route53 hosted zone", "baseDomain", baseDomain)
@@ -143,7 +148,23 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	hostedZoneID := strings.TrimPrefix(*hostedZone.Id, "/hostedzone/")
-	logger.Info("Found Route53 hosted zone", "zoneID", hostedZoneID)
+	appsRecordName := fmt.Sprintf("*.apps.%s.%s", clusterName, baseDomain)
+
+	if len(agentIPs) == 0 {
+		// No agents available - delete the DNS record if it exists
+		logger.Info("No Agent IPs available, deleting *.apps DNS record", "record", appsRecordName)
+		if err := r.Route53Client.DeleteARecord(ctx, hostedZoneID, appsRecordName); err != nil {
+			logger.Error(err, "Failed to delete *.apps A record during cleanup", "record", appsRecordName)
+			// Still return error so we retry - don't silently fail
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		}
+		logger.Info("Successfully deleted *.apps DNS record", "record", appsRecordName)
+		r.EventRecorder.Event(&nodePool, corev1.EventTypeNormal, EventReasonNodePoolDNSCleanup, 
+			fmt.Sprintf("Deleted Route53 *.apps record: %s", appsRecordName))
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("Found Agent IPs", "count", len(agentIPs), "ips", agentIPs)
 
 	// Add finalizer before creating records
 	if !controllerutil.ContainsFinalizer(&nodePool, NodePoolFinalizerName) {
@@ -157,7 +178,6 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Create *.apps DNS record with multiple A records
-	appsRecordName := fmt.Sprintf("*.apps.%s.%s", clusterName, baseDomain)
 	logger.Info("Creating/updating Route53 *.apps A records", "record", appsRecordName, "ips", agentIPs)
 
 	if err := r.Route53Client.UpsertMultipleARecords(ctx, hostedZoneID, appsRecordName, agentIPs); err != nil {

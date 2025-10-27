@@ -180,25 +180,37 @@ func (r *Route53Client) DeleteARecord(ctx context.Context, hostedZoneID, recordN
 		recordName = recordName + "."
 	}
 
-	// First, get the current record to find its details
-	listInput := &route53.ListResourceRecordSetsInput{
-		HostedZoneId:    aws.String(hostedZoneID),
-		StartRecordName: aws.String(recordName),
-		StartRecordType: types.RRTypeA,
-		MaxItems:        aws.Int32(1),
+	// For wildcard records (starting with *), convert to Route53's escaped format (\\052)
+	// This matches what Route53 actually stores and returns
+	searchRecordName := recordName
+	if strings.HasPrefix(recordName, "*.") {
+		searchRecordName = "\\052" + recordName[1:] // Replace * with \\052
 	}
 
-	listOutput, err := r.client.ListResourceRecordSets(ctx, listInput)
-	if err != nil {
-		return fmt.Errorf("failed to list record sets for %s: %w", recordName, err)
-	}
-
-	// Check if the record exists
+	// List all A records in the zone to find our exact match
+	// We can't filter by name, so we need to iterate through all records
 	var recordSet *types.ResourceRecordSet
-	for i := range listOutput.ResourceRecordSets {
-		rs := &listOutput.ResourceRecordSets[i]
-		if aws.ToString(rs.Name) == recordName && rs.Type == types.RRTypeA {
-			recordSet = rs
+	paginator := route53.NewListResourceRecordSetsPaginator(r.client, &route53.ListResourceRecordSetsInput{
+		HostedZoneId: aws.String(hostedZoneID),
+	})
+
+	for paginator.HasMorePages() {
+		listOutput, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list record sets: %w", err)
+		}
+
+		for _, rs := range listOutput.ResourceRecordSets {
+			rsName := aws.ToString(rs.Name)
+			
+			// Exact match check
+			if rsName == searchRecordName && rs.Type == types.RRTypeA {
+				recordSet = &rs
+				break
+			}
+		}
+		
+		if recordSet != nil {
 			break
 		}
 	}
@@ -221,7 +233,7 @@ func (r *Route53Client) DeleteARecord(ctx context.Context, hostedZoneID, recordN
 		},
 	}
 
-	_, err = r.client.ChangeResourceRecordSets(ctx, input)
+	_, err := r.client.ChangeResourceRecordSets(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to delete A record %s: %w", recordName, err)
 	}
