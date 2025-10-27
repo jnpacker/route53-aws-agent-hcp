@@ -48,7 +48,3 @@ podman-push:
 
 .PHONY: podman-build-push
 podman-build-push: podman-build podman-push
-	@echo "Updating deployment.yaml with new image SHA..."
-	@SHA=$$(podman inspect $(IMAGE) --format='{{.ID}}' | sed 's/sha256://'); \
-	sed -i "s|image: .*route53-aws-agent-hcp.*|image: $(IMAGE_REGISTRY)/$(IMAGE_NAME)@sha256:$$SHA|" deploy/deployment.yaml; \
-	echo "Deployment updated with image: $(IMAGE_REGISTRY)/$(IMAGE_NAME)@sha256:$$SHA"

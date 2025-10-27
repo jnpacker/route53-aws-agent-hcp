@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: route53-controller
-  namespace: open-cluster-management
+  namespace: hypershift
   labels:
     app: route53-controller
 spec:
@@ -19,7 +19,7 @@ spec:
       serviceAccountName: route53-controller
       containers:
       - name: manager
-        image: quay.io/jpacker/route53-aws-agent-hcp@sha256:72b2f3d5923b168af24205734166254302172ffc0ee9071a6970e9a1c21516fe
+        image: quay.io/jpacker/route53-aws-agent-hcp@sha256:86b12443c4833194e9e4af7a2f6c1cce2322658f18aaf5754943c8fc7a0ffad0
         imagePullPolicy: IfNotPresent
         command:
         - /manager
