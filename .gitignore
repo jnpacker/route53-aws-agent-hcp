@@ -14,3 +14,5 @@ dist/
 # IDE
 .vscode/
 .cursor/
+deploy/secret.yaml_example
+deploy/secret.yaml

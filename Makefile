@@ -31,3 +31,24 @@ test:
 .PHONY: tidy
 tidy:
 	go mod tidy
+
+# Podman/Container image targets
+IMAGE_NAME ?= route53-aws-agent-hcp
+IMAGE_TAG ?= latest
+IMAGE_REGISTRY ?= localhost
+IMAGE := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+.PHONY: podman-build
+podman-build:
+	podman build -t $(IMAGE) -f Dockerfile .
+
+.PHONY: podman-push
+podman-push:
+	podman push $(IMAGE)
+
+.PHONY: podman-build-push
+podman-build-push: podman-build podman-push
+	@echo "Updating deployment.yaml with new image SHA..."
+	@SHA=$$(podman inspect $(IMAGE) --format='{{.ID}}' | sed 's/sha256://'); \
+	sed -i "s|image: .*route53-aws-agent-hcp.*|image: $(IMAGE_REGISTRY)/$(IMAGE_NAME)@sha256:$$SHA|" deploy/deployment.yaml; \
+	echo "Deployment updated with image: $(IMAGE_REGISTRY)/$(IMAGE_NAME)@sha256:$$SHA"

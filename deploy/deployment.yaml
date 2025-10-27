@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: route53-controller
-  namespace: hypershift
+  namespace: open-cluster-management
   labels:
     app: route53-controller
 spec:
@@ -19,7 +19,7 @@ spec:
       serviceAccountName: route53-controller
       containers:
       - name: manager
-        image: route53-aws-agent-hcp:latest
+        image: quay.io/jpacker/route53-aws-agent-hcp@sha256:72b2f3d5923b168af24205734166254302172ffc0ee9071a6970e9a1c21516fe
         imagePullPolicy: IfNotPresent
         command:
         - /manager
@@ -31,20 +31,17 @@ spec:
         - name: AWS_REGION
           value: "us-east-1"
         # Uncomment if using static credentials (not recommended for production)
-        # - name: AWS_ACCESS_KEY_ID
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: aws-credentials
-        #       key: aws_access_key_id
-        # - name: AWS_SECRET_ACCESS_KEY
-        #   valueFrom:
-        #     secretKeyRef:
-        #       name: aws-credentials
-        #       key: aws_secret_access_key
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws_secret_access_key
         resources:
-          limits:
-            cpu: 500m
-            memory: 256Mi
           requests:
             cpu: 100m
             memory: 128Mi
@@ -52,12 +49,12 @@ spec:
           httpGet:
             path: /healthz
             port: 8081
-          initialDelaySeconds: 15
+          initialDelaySeconds: 30
           periodSeconds: 20
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8081
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
       terminationGracePeriodSeconds: 10
