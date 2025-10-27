@@ -113,12 +113,25 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, err
 			}
 
-			// Remove finalizer
-			controllerutil.RemoveFinalizer(&hostedCluster, FinalizerName)
-			if err := r.Update(ctx, &hostedCluster); err != nil {
-				logger.Error(err, "Failed to remove finalizer")
+			// Fetch fresh copy before removing finalizer to avoid conflicts
+			var freshHostedCluster hypershiftv1beta1.HostedCluster
+			if err := r.Get(ctx, req.NamespacedName, &freshHostedCluster); err != nil {
+				if apierrors.IsNotFound(err) {
+					logger.Info("HostedCluster was deleted before finalizer removal, ignoring")
+					return ctrl.Result{}, nil
+				}
+				logger.Error(err, "Failed to fetch fresh HostedCluster copy for finalizer removal")
 				return ctrl.Result{}, err
 			}
+
+			// Remove finalizer from fresh copy
+			controllerutil.RemoveFinalizer(&freshHostedCluster, FinalizerName)
+			if err := r.Update(ctx, &freshHostedCluster); err != nil {
+				logger.Error(err, "Failed to remove finalizer", "resourceVersion", freshHostedCluster.ResourceVersion)
+				// Return error to trigger retry - the update might be conflicting with another operation
+				return ctrl.Result{}, err
+			}
+			logger.Info("Successfully removed finalizer")
 		}
 		return ctrl.Result{}, nil
 	}
