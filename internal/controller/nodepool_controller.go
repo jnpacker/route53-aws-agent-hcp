@@ -131,6 +131,15 @@ func (r *NodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	baseDomain := hostedCluster.Spec.DNS.BaseDomain
 	clusterName := hostedCluster.Name
 
+	// Check if this is an agent-based (HCP BM) cluster
+	// Only reconcile NodePools for clusters that have associated agents
+	if !r.isAgentBasedNodePool(&nodePool) {
+		logger.V(1).Info("Skipping reconciliation - NodePool is not agent-based (HCP BM)",
+			"nodepool", nodePool.Name,
+			"cluster", clusterName)
+		return ctrl.Result{}, nil
+	}
+
 	// Get Agent IPs for this NodePool
 	agentIPs, err := r.getAgentIPsForNodePool(ctx, &nodePool)
 	if err != nil {
@@ -221,6 +230,15 @@ func (r *NodePoolReconciler) getHostedClusterForNodePool(ctx context.Context, no
 	}
 
 	return &hostedCluster, nil
+}
+
+// isAgentBasedNodePool checks if a NodePool is agent-based (HCP BM)
+func (r *NodePoolReconciler) isAgentBasedNodePool(nodePool *hypershiftv1beta1.NodePool) bool {
+	// Check if the platform type is "Agent"
+	if nodePool.Spec.Platform.Type == "Agent" {
+		return true
+	}
+	return false
 }
 
 // getAgentIPsForNodePool retrieves the IPs of all Agents assigned to this NodePool

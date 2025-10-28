@@ -19,7 +19,7 @@ spec:
       serviceAccountName: route53-controller
       containers:
       - name: manager
-        image: quay.io/jpacker/route53-aws-agent-hcp@sha256:bb83bcb5fcc9118b21c6b58baa80092e104527f4df6e51783a2d060deb6949ff
+        image: quay.io/jpacker/route53-aws-agent-hcp@sha256:005f30dd9099c35ca5f6c9ab3950cdb90245f8239877a8a9ad7fd323536bfb4c
         imagePullPolicy: IfNotPresent
         command:
         - /manager
