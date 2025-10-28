@@ -148,6 +148,14 @@ func (r *HostedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
+	// Check if this is an agent-based (HCP BM) cluster
+	// Only reconcile HostedClusters that have associated agents
+	if !r.isAgentBasedCluster(&hostedCluster) {
+		logger.V(1).Info("Skipping reconciliation - HostedCluster is not agent-based (HCP BM)",
+			"cluster", hostedCluster.Name)
+		return ctrl.Result{}, nil
+	}
+
 	// Get base domain and load balancer DNS
 	baseDomain := hostedCluster.Spec.DNS.BaseDomain
 	loadBalancerDNS := r.getLoadBalancerDNS(&hostedCluster)
@@ -309,6 +317,13 @@ func (r *HostedClusterReconciler) validateHostedCluster(hc *hypershiftv1beta1.Ho
 		return fmt.Errorf("spec.dns.baseDomain is required")
 	}
 	return nil
+}
+
+// isAgentBasedCluster checks if a HostedCluster is agent-based (Bare Metal)
+// by examining the spec.platform.type field
+func (r *HostedClusterReconciler) isAgentBasedCluster(hc *hypershiftv1beta1.HostedCluster) bool {
+	// Agent-based clusters have spec.platform.type = "Agent"
+	return string(hc.Spec.Platform.Type) == "Agent"
 }
 
 // getLoadBalancerDNS extracts the load balancer DNS from the HostedCluster status
